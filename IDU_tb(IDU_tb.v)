@@ -1,0 +1,154 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 10.05.2025 00:37:33
+// Design Name: 
+// Module Name: IDU_tb
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
+`timescale 1ns / 1ps
+
+module IDU_tb;
+
+    // Inputs
+    reg [31:0] instruction;
+    reg [31:0] PC;
+    reg [31:0] rs1_data_in;
+    reg [31:0] rs2_data_in;
+
+    // Outputs
+    wire [5:0] control_signal_EXE;
+    wire [5:0] control_signal_PC;
+    wire [5:0] control_signal_MEM;
+    wire [5:0] control_signal_INT;
+    wire [5:0] control_signal_IO;
+    wire [5:0] control_signal_IFU;
+    wire [31:0] target_address;
+    wire [4:0] rd, rs1, rs2;
+    wire [31:0] imm, loc, write_data;
+    wire [4:0] store_reg_loc;
+    wire mem_write_en, mem_read_en;
+    wire ret_from_fun;
+    wire I0, I1, Timer_int;
+    wire RF_trigger;
+    wire [31:0] rs1_data, rs2_data;
+
+    // Instantiate the IDU module
+    IDU uut (
+        .instruction(instruction),
+        .PC(PC),
+        .rs1_data_in(rs1_data_in),
+        .rs2_data_in(rs2_data_in),
+        
+        //output
+        .control_signal_EXE(control_signal_EXE),
+        .control_signal_PC(control_signal_PC),
+        .control_signal_MEM(control_signal_MEM),
+        .control_signal_INT(control_signal_INT),
+        .control_signal_IO(control_signal_IO),
+        .control_signal_IFU(control_signal_IFU),
+        .target_address(target_address),
+        .rd(rd),
+        .rs1(rs1),
+        .rs2(rs2),
+        .imm(imm),
+        .loc(loc),
+        .write_data(write_data),
+        .store_reg_loc(store_reg_loc),
+        .mem_write_en(mem_write_en),
+        .mem_read_en(mem_read_en),
+        .ret_from_fun(ret_from_fun),
+        .I0(I0),
+        .I1(I1),
+        .Timer_int(Timer_int),
+        .RF_trigger(RF_trigger),
+        .rs1_data(rs1_data),
+        .rs2_data(rs2_data)
+    );
+
+    // Procedure
+    initial begin
+        // Initialize values
+        PC = 32'h00001000;
+        rs1_data_in = 32'h0000000A;
+        rs2_data_in = 32'h00000005;
+
+        // Test R-Type (ADD)
+        instruction = {6'b000000, 5'd1, 5'd2, 5'd3, 11'b00000000001}; // ADD r3 = r1 + r2
+        #10;
+        $display("R-Type ADD: control_signal_EXE = %b expected 100000 : ", control_signal_EXE);
+
+        // Test I-Type (ADDI)
+        instruction = {6'b000001, 5'd1, 5'd3, 12'b0000000000001010 , 4'b0001}; // ADDI r3 = r1 + 10
+        #10;
+        $display("I-Type ADDI: control_signal_EXE = %b, imm = %d expected 101010", control_signal_EXE, imm);
+
+        // Test J-Type (JUMP)
+        instruction = {6'b000010, 26'b00000000000000000000000001}; // Jump to PC[31:28] | 26'b... | 2'b00
+        #10;
+        $display("JUMP: target_address = %h   expected all0's followed by a single 1, control_signal_PC = %b expected 110011", target_address, control_signal_PC);
+
+        // Test J-Type (RET)
+        instruction = {6'b000010, 26'b00000000000000000000000000}; // RET
+        #10;
+        $display("RET: control_signal_PC = %b expected 000110", control_signal_PC);
+
+        // Test B-Type (BEQ)
+        instruction = {6'b000011, 5'd1, 5'd2, 2'b00, 14'b00000000000010}; // BEQ if rs1==rs2
+        rs1_data_in = 32'h000000AA;
+        rs2_data_in = 32'h000000AA;
+        #10;
+        $display("BEQ: control_signal_PC = %b expected 001100, target_address = %h expected 00001002", control_signal_PC, target_address);
+
+        // Test M-Type (LW)
+        instruction = {6'b000100, 1'b1, 5'd2, 15'b000000000001010, 5'd1}; // LW rs2, imm(rs1)
+        rs1_data_in = 32'h100;
+        #10;
+        $display("LW: loc = %h expected 010a, mem_read_en = %b expected 1", loc, mem_read_en);
+
+        // Test M-Type (SW)
+        instruction = {6'b000100, 1'b0 , 5'd2, 15'b000000000001010, 5'd1}; // SW rs2, imm(rs1)
+        rs2_data_in = 32'h200;
+        #10;
+        $display("SW: loc = %h expected 020a , mem_write_en = %bnexpected 1", loc, mem_write_en);
+
+        // Test Function CALL
+//        instruction = {6'b000101, 26'd64}; // CALL to 64
+//        #10;
+//        $display("CALL: target_address = %h, control_signal_PC = %b", target_address, control_signal_PC);
+
+//        // Test RET from function
+//        instruction = {6'b000101, 26'd0}; // RET from function
+//        #10;
+//        $display("RET from function: ret_from_fun = %b", ret_from_fun);
+
+//        // Test NOP
+//        instruction = 32'b111111_00000000000000000000000000;
+//        #10;
+//        $display("NOP: control_signal_PC = %b", control_signal_PC);
+
+        // Test HALT
+        instruction = 32'b111110_00000000000000000000000000;
+        #10;
+        $display("HALT: control_signal_PC = %b expected 111011", control_signal_PC);
+
+        $display("Testbench completed.");
+        $stop;
+    end
+
+endmodule
+
