@@ -1,0 +1,170 @@
+
+//`timescale 1ns / 1ps
+
+//module DataMemory_tb;
+
+//    // Inputs
+//    reg clk;
+//    reg mem_read;
+//    reg mem_write;
+//    reg [31:0] write_data;
+//    reg [31:0] address;
+//    reg [4:0] store_data_to;
+//    reg [5:0] control_signal_MEM;
+
+//    // Outputs
+//    wire [31:0] read_data;
+//    wire [4:0] destination_reg_address;
+//    wire to_wb;
+
+//    // Instantiate the Unit Under Test (UUT)
+//    DataMemory uut (
+//        .clk(clk),
+//        .mem_read(mem_read),
+//        .mem_write(mem_write),
+//        .write_data(write_data),
+//        .address(address),
+//        .store_data_to(store_data_to),
+//        .control_signal_MEM(control_signal_MEM),
+//        .destination_reg_address(destination_reg_address),
+//        .to_wb(to_wb),
+//        .read_data(read_data)
+//    );
+
+//    // Clock generation
+//    always #5 clk = ~clk;
+
+//    initial begin
+//        // Initialize inputs
+//        clk = 0;
+//        mem_read = 0;
+//        mem_write = 0;
+//        write_data = 0;
+//        address = 0;
+//        store_data_to = 0;
+//        control_signal_MEM = 6'b000000;
+
+//        // Wait for global reset
+//        #10;
+
+//        // ---------------------------------------
+//        // Test 1: Write to address 8'hA0
+//        // ---------------------------------------
+//        address = 32'h000000A0;
+//        write_data = 32'hAAAAAAAA;
+//        mem_write = 1;
+//        mem_read = 0;
+//        control_signal_MEM = 6'b111001;
+
+//        #10; // rising edge of clock
+
+//        mem_write = 0;
+
+//        // ---------------------------------------
+//        // Test 2: Read from address 8'hA0
+//        // ---------------------------------------
+//        #5;
+//        mem_read = 1;
+//        store_data_to = 5'd12;
+//        #5;
+
+//        // Check outputs
+//        $display("Read Data = %h", read_data);
+//        $display("Destination Register = %d", destination_reg_address);
+//        $display("To WB = %b", to_wb);
+
+//        if (read_data == 32'hAAAAAAAA && destination_reg_address == 5'd12 && to_wb == 1)
+//            $display("Test PASSED");
+//        else
+//            $display("Test FAILED");
+
+//        // ---------------------------------------
+//        // Test 3: Invalid control signal - should NOT read
+//        // ---------------------------------------
+////        mem_read = 1;
+////        control_signal_MEM = 6'b000000; // Invalid
+////        #5;
+
+////        if (read_data != 32'hAAAAAAAA)
+////            $display("Invalid control signal detected successfully -- test PASSED");
+////        else
+////            $display("------------------");
+
+//        $finish;
+//    end
+
+//endmodule
+
+`timescale 1ns / 1ps
+
+module DataMemory_tb;
+
+    reg clk;
+    reg mem_read;
+    reg mem_write;
+    reg [31:0] write_data;
+    reg [31:0] address;
+    reg [4:0] store_data_to;
+    reg [5:0] control_signal_MEM;
+
+    wire [4:0] destination_reg_address;
+    wire to_wb;
+    wire [31:0] read_data;
+
+    // Instantiate the DataMemory module
+    DataMemory uut (
+        .clk(clk),
+        .mem_read(mem_read),
+        .mem_write(mem_write),
+        .write_data(write_data),
+        .address(address),
+        .store_data_to(store_data_to),
+        .control_signal_MEM(control_signal_MEM),
+        .destination_reg_address(destination_reg_address),
+        .to_wb(to_wb),
+        .read_data(read_data)
+    );
+
+    // Clock generation
+    initial clk = 0;
+    always #5 clk = ~clk;  // 10 ns clock
+
+    initial begin
+        // Initialize
+        mem_read = 0;
+        mem_write = 0;
+        write_data = 32'd0;
+        address = 32'd0;
+        store_data_to = 5'd0;
+        control_signal_MEM = 6'b000000;
+
+        #10;
+
+        // === STORE: write 0xDEADBEEF to address 0x10 ===
+        mem_write = 1;
+        mem_read = 0;
+        write_data = 32'hAAAAAAAA;
+        address = 32'h10;
+        control_signal_MEM = 6'b111001;  // sw
+        #10;
+
+        mem_write = 0;
+
+        // === LOAD: read from address 0x10 into reg 5 ===
+        #10;
+        mem_read = 1;
+        store_data_to = 5'd5;
+        control_signal_MEM = 6'b111000;  // lw
+        #10;
+
+        // Display results
+        $display("Read Data: 0x%h", read_data);
+        $display("To_WB: %b", to_wb);
+        $display("Destination Register: %d", destination_reg_address);
+
+        #10;
+
+        $finish;
+    end
+
+endmodule
