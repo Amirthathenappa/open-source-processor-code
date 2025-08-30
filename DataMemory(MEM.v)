@@ -1,0 +1,36 @@
+module DataMemory (
+    input wire clk,
+    input wire mem_read,
+    input wire mem_write,
+    input wire [31:0] write_data,
+    input wire [31:0] address,
+    input wire [4:0] store_data_to,
+    input wire [5:0] control_signal_MEM,
+    output reg [4:0] destination_reg_address,
+    output reg to_wb,
+    output reg [31:0] read_data
+);
+
+    reg [31:0] memory [0:255]; // 256-word memory
+
+    // Synchronous memory write
+    always @(posedge clk) begin
+        if (mem_write && (control_signal_MEM == 6'b111001)) begin
+            memory[address[7:0]] <= write_data;
+        end
+    end
+
+    // Combinational read
+    always @(*) begin
+        read_data = 32'd0;
+        to_wb = 1'b0;
+        destination_reg_address = 5'd0;
+
+        if (mem_read && (control_signal_MEM == 6'b111000)) begin//lw
+            read_data = memory[address[7:0]];
+            destination_reg_address = store_data_to;
+            to_wb = 1'b1;
+        end
+    end
+
+endmodule
