@@ -1,0 +1,174 @@
+`timescale 1ns / 1ps
+
+module tb_RF_IDU_EXE;
+
+    // Inputs
+    reg [31:0] instruction;
+    reg [31:0] PC;
+    reg        RF_from_IO;
+    reg        io_we;
+    reg [31:0] rd_data;
+    reg [31:0] data_io;
+
+    // Internal signals for controlled write
+    reg        tb_we;
+    reg [4:0]  tb_rd_addr;
+
+    wire        we;
+    wire [4:0]  rd_addr;
+
+    // Wires connecting IDU and RF
+    wire       RF_trigger;
+    wire [4:0] rs1, rs2;
+    wire [31:0] rs1_data_RF, rs2_data_RF;
+    wire [31:0] rs1_data , rs2_data;
+
+    // IDU outputs
+    wire [5:0] control_signal_EXE;
+    wire [31:0] imm, target_address, loc, write_data;
+    wire [4:0] rd_out;
+    wire [4:0] store_reg_loc;
+    wire mem_write_en, mem_read_en;
+    wire ret_from_fun, I0, I1, Timer_int;
+    wire [5:0] control_signal_PC, control_signal_MEM, control_signal_INT;
+    wire [5:0] control_signal_IO, control_signal_IFU;
+
+    // EXE Unit
+    wire [31:0] alu_out;
+    wire [3:0] flags;
+
+    // Assign output control logic (write enable and rd_addr selection)
+    assign we = tb_we;
+    assign rd_addr = tb_we ? tb_rd_addr : rd_out;
+
+    // Instantiate Register File
+    RegisterFile RF (
+        .we(we),
+        .RF_trigger(RF_trigger),
+        .RF_from_IO(RF_from_IO),
+        .io_we(io_we),
+        .rs1_addr(rs1),
+        .rs2_addr(rs2),
+        .rd_addr(rd_addr),
+        .rd_data(rd_data),
+        .data_io(data_io),
+        .rs1_data(rs1_data_RF),
+        .rs2_data(rs2_data_RF)
+    );
+
+    // Instantiate IDU
+    IDU idu (
+        .instruction(instruction),
+        .PC(PC),
+        .rs1_data_in(rs1_data_RF),
+        .rs2_data_in(rs2_data_RF),
+        .control_signal_EXE(control_signal_EXE),
+        .control_signal_PC(control_signal_PC),
+        .control_signal_MEM(control_signal_MEM),
+        .control_signal_INT(control_signal_INT),
+        .control_signal_IO(control_signal_IO),
+        .control_signal_IFU(control_signal_IFU),
+        .target_address(target_address),
+        .rd(rd_out),
+        .rs1(rs1),
+        .rs2(rs2),
+        .imm(imm),
+        .loc(loc),
+        .write_data(write_data),
+        .store_reg_loc(store_reg_loc),
+        .mem_write_en(mem_write_en),
+        .mem_read_en(mem_read_en),
+        .ret_from_fun(ret_from_fun),
+        .I0(I0),
+        .I1(I1),
+        .Timer_int(Timer_int),
+        .RF_trigger(RF_trigger),
+        .rs1_data(rs1_data),
+        .rs2_data(rs2_data)
+    );
+
+    // Instantiate EXE Unit
+    EXE_Unit exe_unit (
+        .rs1_data(rs1_data),
+        .rs2_data(rs2_data),
+        .imm(imm),
+        .rd_addr(rd_out),
+        .control_signal_exe(control_signal_EXE),
+        .result(alu_out),
+        .result_rd_addr(),
+        .flags(flags),
+        .reg_write()
+    );
+
+    initial begin
+        $display("Starting Combined RF + IDU + EXE Simulation...");
+        PC = 32'h00000000;
+        RF_from_IO = 0;
+        io_we = 0;
+        data_io = 32'h00000000;
+
+        // 1. Initialize RF with known values
+        tb_we = 1;
+        rd_data = 32'h00000001;
+        tb_rd_addr = 5'd1; #10;
+        rd_data = 32'h00000002;
+        tb_rd_addr = 5'd2; #10;
+        rd_data = 32'h00000003;
+        tb_rd_addr = 5'd3; #10;
+        rd_data = 32'h00000004;
+        tb_rd_addr = 5'd4; #10;
+        rd_data = 32'h00000005;
+        tb_rd_addr = 5'd5; #10;
+        rd_data = 32'h00000006;
+        tb_rd_addr = 5'd6; #10;
+        rd_data = 32'h00000007;
+        tb_rd_addr = 5'd7; #10;
+        rd_data = 32'h00000008;
+        tb_rd_addr = 5'd8; #10;
+        rd_data = 32'h00000009;
+        tb_rd_addr = 5'd9; #10;
+        rd_data = 32'h00000010;
+        tb_rd_addr = 5'd10; #10;
+        tb_we = 0;
+
+        // EX1: ADD r5, r3, r4
+        instruction = 32'b000000_00101_00011_00100_00000000001;
+        #20;
+        $display("EX1: ADD r5 = r3 + r4");
+        $display("RS1 = %d, RS2 = %d, RD = %d", rs1, rs2, rd_out);
+        $display("RS1 data = %h, RS2 data = %h, ALU out = %h", rs1_data, rs2_data, alu_out);
+        $display("////////");
+
+        // EX2: OR r3, r2, r1
+        instruction = 32'b000000_00011_00010_00001_00000000101;
+        #20;
+        $display("EX2: OR r3 = r2 | r1");
+        $display("RS1 data = %h, RS2 data = %h, ALU out = %h", rs1_data, rs2_data, alu_out);
+        $display("////////");
+
+        // EX3: MOV r3, r2
+        instruction = 32'b000000_00011_00010_00001_00000001010;
+        #20;
+        $display("EX3: MOV r3 = r2");
+        $display("RS1 data = %h, ALU out = %h", rs1_data, alu_out);
+        $display("////////");
+
+        // EX4: ADDI r7, r6, 25
+        instruction = 32'b000001_00111_00110_000000011001_0001;
+        #20;
+        $display("EX4: ADDI r7 = r6 + 25");
+        $display("RS1 data = %h, IMM = %h, ALU out = %h", rs1_data, imm, alu_out);
+        $display("////////");
+
+        // EX5: SHLI r8, r5, 1
+        instruction = 32'b000001_01000_00101_000000000001_0111;
+        #20;
+        $display("EX5: SHLI r8 = r5 << 1");
+        $display("RS1 data = %h, IMM = %h, ALU out = %h", rs1_data, imm, alu_out);
+        $display("////////");
+
+        $finish;
+    end
+
+endmodule
+
