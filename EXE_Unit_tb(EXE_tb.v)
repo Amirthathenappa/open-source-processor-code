@@ -1,0 +1,87 @@
+
+`timescale 1ns/1ps
+
+module EXE_Unit_tb;
+
+    reg [5:0] control_signal_exe;
+    reg [31:0] rs1_data, rs2_data, imm;
+    reg [4:0] rd_addr;
+    wire [31:0] result;
+    wire [4:0] result_rd_addr;
+    wire [3:0] flags; // [Zero, Parity, Carry, Borrow]
+    wire reg_write;
+
+    EXE_Unit uut (
+        .control_signal_exe(control_signal_exe),
+        .rs1_data(rs1_data),
+        .rs2_data(rs2_data),
+        .rd_addr(rd_addr),
+        .imm(imm),
+        .result(result),
+        .result_rd_addr(result_rd_addr),
+        .flags(flags),
+        .reg_write(reg_write)
+    );
+
+    task run_test;
+        input [5:0] opcode;
+        input [31:0] a, b, immediate;
+        input [8*20:1] op_name;
+        begin
+            control_signal_exe = opcode;
+            rs1_data = a;
+            rs2_data = b;
+            imm = immediate;
+            rd_addr = 5'd10;
+
+            #5;
+            $display("Op: %s | rs1: %h, rs2: %h, imm: %h => Result: %h | Z:%b P:%b C:%b B:%b | RegWrite: %b",
+                     op_name, rs1_data, rs2_data, imm, result,
+                     flags[3], flags[2], flags[1], flags[0], reg_write);
+        end
+    endtask
+
+    initial begin
+        $display("Starting EXE Unit Test...");
+
+        // Arithmetic ops
+        run_test(6'b100000, 32'd5, 32'd10, 32'd0, "ADD");
+        run_test(6'b100001, 32'd10, 32'd5, 32'd0, "SUB");
+        run_test(6'b100001, 32'd5, 32'd10, 32'd0, "SUB_NEG");
+        run_test(6'b100010, 32'd3, 32'd4, 32'd0, "MUL");
+
+        // Logic ops
+        run_test(6'b100011, 32'hFF00FF00, 32'h0F0F0F0F, 32'd0, "AND");
+        run_test(6'b100100, 32'hFF00FF00, 32'h0F0F0F0F, 32'd0, "OR");
+        run_test(6'b100101, 32'hFF00FF00, 32'h0F0F0F0F, 32'd0, "XOR");
+
+        // Shift ops
+        run_test(6'b100110, 32'h1, 32'd4, 32'd0, "SHL");
+        run_test(6'b000111, 32'h10, 32'd2, 32'd0, "SHR");
+
+        // Comparison and move
+        run_test(6'b101000, 32'd100, 32'd100, 32'd0, "CMP_EQ");
+        run_test(6'b101000, 32'd100, 32'd200, 32'd0, "CMP_NEQ");
+        run_test(6'b101001, 32'd1234, 32'd0, 32'd0, "MOV");
+
+        // Immediate operations
+        run_test(6'b101010, 32'd10, 32'd0, 32'd20, "ADDI");
+        run_test(6'b101011, 32'd30, 32'd0, 32'd10, "SUBI");
+        run_test(6'b101011, 32'd10, 32'd0, 32'd30, "SUBI_NEG");
+        run_test(6'b101100, 32'd2, 32'd0, 32'd5, "MULI");
+        run_test(6'b101101, 32'hF0F0F0F0, 32'd0, 32'h0F0F0F0F, "ANDI");
+        run_test(6'b101110, 32'hF0F0F0F0, 32'd0, 32'h0F0F0F0F, "ORI");
+        run_test(6'b101111, 32'hAAAA5555, 32'd0, 32'h5555AAAA, "XORI");
+
+        run_test(6'b110000, 32'h1, 32'd0, 32'd3, "SHLI");
+        run_test(6'b110001, 32'h80, 32'd0, 32'd2, "SHRI");
+
+        run_test(6'b110010, 32'hFACEB00C, 32'd0, 32'd1234, "MOVI");
+
+        // Invalid case
+        run_test(6'b000000, 32'd1, 32'd2, 32'd3, "INVALID");
+
+        $display("Finished EXE Unit Test.");
+        $finish;
+    end
+endmodule
