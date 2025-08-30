@@ -1,0 +1,226 @@
+`timescale 1ns / 1ps
+
+module tb_RF_IDU;
+
+    // Inputs
+    reg [31:0] instruction;
+    reg [31:0] PC;
+    reg        we;
+    reg        RF_from_IO;
+    reg        io_we;
+    reg [4:0]  rd_addr;
+    reg [31:0] rd_data;
+    reg [31:0] data_io;
+
+    // Wires connecting IDU and RF
+    wire       RF_trigger;
+    wire [4:0] rs1, rs2;
+    wire [11:0] imm;
+    wire [31:0] rs1_data_RF, rs2_data_RF;
+    wire [31:0] rs1_data , rs2_data;
+
+    // IDU outputs
+    wire [5:0] control_signal_EXE;
+    wire [31:0] imm, target_address, loc, write_data;
+    wire [4:0] rd_out;
+    wire [4:0] store_reg_loc;
+    wire mem_write_en, mem_read_en;
+    wire ret_from_fun, I0, I1, Timer_int;
+    wire [5:0] control_signal_PC, control_signal_MEM, control_signal_INT;
+    wire [5:0] control_signal_IO, control_signal_IFU;
+   
+    
+    // Instantiate Register File
+    RegisterFile RF (
+        .we(we),
+        .RF_trigger(RF_trigger),
+        .RF_from_IO(RF_from_IO),
+        .io_we(io_we),
+        .rs1_addr(rs1),
+        .rs2_addr(rs2),
+        .rd_addr(rd_addr),
+        .rd_data(rd_data),
+        .data_io(data_io),
+        .rs1_data(rs1_data_RF),
+        .rs2_data(rs2_data_RF)
+    );
+
+    // Instantiate IDU
+    IDU idu (
+        .instruction(instruction),
+        .PC(PC),
+        .rs1_data_in(rs1_data_RF),
+        .rs2_data_in(rs2_data_RF),
+        .control_signal_EXE(control_signal_EXE),
+        .control_signal_PC(control_signal_PC),
+        .control_signal_MEM(control_signal_MEM),
+        .control_signal_INT(control_signal_INT),
+        .control_signal_IO(control_signal_IO),
+        .control_signal_IFU(control_signal_IFU),
+        .target_address(target_address),
+        .rd(rd_out),
+        .rs1(rs1),
+        .rs2(rs2),
+        .imm(imm),
+        .loc(loc),
+        .write_data(write_data),
+        .store_reg_loc(store_reg_loc),
+        .mem_write_en(mem_write_en),
+        .mem_read_en(mem_read_en),
+        .ret_from_fun(ret_from_fun),
+        .I0(I0),
+        .I1(I1),
+        .Timer_int(Timer_int),
+        .RF_trigger(RF_trigger),
+        .rs1_data(rs1_data),
+        .rs2_data(rs2_data)
+    );
+
+    initial begin
+        $display("Starting Combined RF + IDU Simulation...");
+        PC = 32'h00000000;
+        we = 0;
+        RF_from_IO = 0;
+        io_we = 0;
+        data_io = 32'h00000000;
+
+        // 1. Initialize RF: write some known values to registers
+        we = 1;
+        rd_addr = 5'd1; rd_data = 32'h00000001; #10;
+        rd_addr = 5'd2; rd_data = 32'h00000002; #10;
+        rd_addr = 5'd3; rd_data = 32'h00000003; #10;
+        rd_addr = 5'd4; rd_data = 32'h00000004; #10;
+        rd_addr = 5'd5; rd_data = 32'h00000005; #10;
+        rd_addr = 5'd6; rd_data = 32'h00000006; #10;
+        rd_addr = 5'd7; rd_data = 32'h00000007; #10;
+        rd_addr = 5'd8; rd_data = 32'h00000008; #10;
+        rd_addr = 5'd9; rd_data = 32'h00000009; #10;
+        rd_addr = 5'd10; rd_data = 32'h00000010; #10;
+        rd_addr = 5'd11; rd_data = 32'h00000011; #10;
+        rd_addr = 5'd12; rd_data = 32'h00000012; #10;
+        rd_addr = 5'd13; rd_data = 32'h00000013; #10;
+        rd_addr = 5'd14; rd_data = 32'h00000014; #10;
+        rd_addr = 5'd15; rd_data = 32'h00000015; #10;
+        rd_addr = 5'd16; rd_data = 32'h00000016; #10;
+        rd_addr = 5'd17; rd_data = 32'h00000017; #10;
+        we = 0;
+//EX1
+        // 2. Send R-type "ADD" instruction (opcode = 000000, funct = 00000000001)
+        // ADD r5, r3, r4 -> rd=5, rs1=3, rs2=4
+        instruction = 32'b000000_00101_00011_00100_00000000001;
+        #20;
+
+        // 3. Check outputs (control signals, target address, etc.)
+        $display("IDU RS1 = %d, RS2 = %d, RD = %d", rs1, rs2, rd_out);
+        $display("RF RS1 data = %h, RS2 data = %h Expected (3,4)", rs1_data, rs2_data);
+        $display("Control Signal EXE = %b 100000", control_signal_EXE);
+
+        #20;
+
+//EX2        
+        // OR r3, r2, r1 -> rd=3, rs1=2, rs2=1
+        instruction = 32'b000000_00011_00010_00001_00000000101;
+        #20;
+
+        $display("IDU RS1 = %d, RS2 = %d, RD = %d", rs1, rs2, rd_out);
+        $display("RF RS1 data = %h, RS2 data = %h Expected (1,2)", rs1_data, rs2_data);
+        $display("Control Signal EXE = %b expected 100100", control_signal_EXE);
+
+        #20;
+  
+//EX3      
+        // MOV r3, r2 -> r1= content of r1
+        instruction = 32'b000000_00011_00010_00001_00000001010;
+        #20;
+
+        $display("IDU RS1 = %d, RS2 = %d, RD = %d", rs1, rs2, rd_out);
+        $display("RF RS1 data = %h Expected (1)", rs1_data);
+        $display("Control Signal EXE = %b expected 100100", control_signal_EXE);
+
+        #20;
+//EX4        
+ //        ADDI r7, r6 , 25 -> r7= r6 + 25
+         instruction = 32'b000001_00111_00110_000000011001_0001;
+        #20;
+
+        $display("IDU RS1 = %d, IMM = %d, RD = %d", rs1, imm, rd_out);
+        $display("RF RS1 data = %h Expected (6)", rs1_data );
+        $display("Control Signal EXE = %b expected 101010", control_signal_EXE);
+
+        #20;
+//EX5
+        // SHLI r8, r5 , 1 -> r8= r5 <<1
+        instruction = 32'b000001_01000_00101_000000000001_0111;
+        #20;
+
+        $display("IDU RS1 = %d, IMM = %d, RD = %d", rs1, imm, rd_out);
+        $display("RF RS1 data = %h Expected (8,5)", rs1_data );
+        $display("Control Signal EXE = %b expected 110000", control_signal_EXE);
+
+        #20;
+        
+//EX6
+        //JUMP 32 , Control will jump to 32 addree
+        instruction = 32'b000010_00000000000000000000100000;
+        #20;
+
+        $display("target address = %d Expected (32)", target_address );
+        $display("Control Signal PC = %b expected 110011", control_signal_PC);
+
+        #20;
+        
+//EX7
+        //RET , Control will jump to 32 addree
+        instruction = 32'b000010_00000000000000000000000000;
+        #20;
+
+        $display("ret from function = %d Expected (0)", ret_from_fun );
+        $display("Control Signal PC = %b expected 110011", control_signal_PC);
+
+        #20;
+        
+//EX8
+        //BNE r10,r11,5 if r10==r11 pc=pc+5
+       instruction = 32'b000011_01010_01011_01_00000000000101;
+        #20;
+
+        $display("target address = %b",target_address);
+        $display("Control Signal PC = %b NO branch will happen ", control_signal_PC);
+
+        #20;
+//EX9
+        //LW r10,0(r5) 
+        instruction = 32'b000100_1_01010_000000000000000_00101;
+        #20;
+        $display("@@@@   loc = %d expected 5, store_reg_loc = %d expected 10  ,mem_read_en = %b expected(1)", loc, store_reg_loc, mem_read_en);
+        //$display("IMM = %b Expected (00000000000101)",imm);
+        $display("Control Signal MEM = %b expected 111000", control_signal_MEM);
+
+        #20;
+        
+//EX10
+        //NOP 
+        instruction = 32'b11111110101000000000000000000010;
+        
+        #20;
+        
+        $display(" Control Signal PC = %b expected 111010  Control Signal IFU = %b expected 001001", control_signal_PC ,control_signal_IFU);
+
+        #20;
+        
+//EX11
+        //IN
+        instruction = 32'b11101111010100000000000000000001;
+        
+        #20;
+        
+        $display("Control Signal IO = %b expected 111110 ", control_signal_IO);
+
+        #20;
+
+
+        
+        
+        $finish;
+    end
+endmodule
