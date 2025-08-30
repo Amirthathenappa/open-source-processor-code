@@ -1,0 +1,46 @@
+`timescale 1ns / 1ps
+
+//we may add reset to the entire RF
+module RegisterFile (
+    input  wire        clk,
+    input  wire        we,           // Write enable from WB
+    input  wire        RF_trigger,   // IDU request
+    input  wire        RF_from_IO,   // IO request
+    input  wire        io_we,        // IO write enable
+    input  wire [4:0]  rs1_addr,
+    input  wire [4:0]  rs2_addr,
+    input  wire [4:0]  rd_addr,
+    input  wire [31:0] rd_data,
+    input  wire [31:0] data_io,
+    output reg  [31:0] rs1_data,
+    output reg  [31:0] rs2_data
+
+);
+
+    reg [31:0] regs [31:0];
+
+
+always @(*) begin
+   
+    rs1_data = 32'b0;
+    rs2_data = 32'b0;
+
+   // if (RF_trigger && !we) begin
+        rs1_data = regs[rs1_addr];
+        rs2_data = regs[rs2_addr];
+    //end else
+     if (RF_from_IO) begin
+        rs1_data = regs[31];
+    end
+end
+
+//  Synchronous writes
+always @(posedge clk) begin
+    if (io_we) begin
+        regs[31] <= data_io;
+    end else if (we) begin
+        regs[rd_addr] <= rd_data;
+    end
+end
+
+endmodule 
