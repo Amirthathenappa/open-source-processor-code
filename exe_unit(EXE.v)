@@ -1,0 +1,74 @@
+module EXE_Unit(
+    input wire [5:0] control_signal_exe,  // From control unit
+    input wire [31:0] rs1_data,           // Source register 1 data from RF
+    input wire [31:0] rs2_data,           // Source register 2 data from RF
+    input wire [4:0] rd_addr,             // Destination register address
+    input wire [31:0] imm,                // Immediate value from IDU
+    output reg [31:0] result,             // Operation result
+    output reg [4:0] result_rd_addr,      // Destination register address
+    output reg [3:0] flags,              // [Zero, Parity, Carry, Borrow]
+    output reg reg_write                  // Write enable signal for WB unit
+);
+
+    reg [31:0] operand1, operand2;
+    reg carry_temp, borrow_temp;
+
+    // Read operands from registers
+    always @(*) begin
+        operand1 = rs1_data;
+        operand2 = rs2_data;
+    end
+
+    // ALU operations
+    always @(*) begin
+        carry_temp = 0; 
+        borrow_temp = 0;
+        result_rd_addr = rd_addr;
+        reg_write = 1; // Default to writing the result
+
+        case (control_signal_exe)
+            6'b100000: {carry_temp, result} = operand1 + operand2;          // ADD
+            6'b100001: {borrow_temp, result} = ($signed(operand1) < $signed(operand2)) ? {1'b1, operand1 - operand2} : {1'b0, operand1 - operand2}; // SUB
+            6'b100010: result = operand1 * operand2;                        // MUL
+            6'b100011: result = operand1 & operand2;                        // AND
+            6'b100100: result = operand1 | operand2;                        // OR
+            6'b100101: result = operand1 ^ operand2;                        // XOR
+            6'b100110: result = operand1 << operand2;                       // SHL
+            6'b100111: result = operand1 >> operand2;                       // SHR
+            6'b101000: result = (operand1 == operand2) ? 32'd1 : 32'd0;     // CMP
+            6'b101001: result = operand1;                                    // MOV
+            6'b101010: {carry_temp, result} = operand1 + imm;               // ADDI
+            6'b101011: {borrow_temp, result} = ($signed(operand1) < $signed(imm)) ? {1'b1, operand1 - imm} : {1'b0, operand1 - imm}; // SUBI
+            6'b101100: result = operand1 * imm;                              // MULI
+            6'b101101: result = operand1 & imm;                              // ANDI
+            6'b101110: result = operand1 | imm;                              // ORI
+            6'b101111: result = operand1 ^ imm;                              // XORI
+            6'b110000: result = operand1 << imm;                             // SHLI
+            6'b110001: result = operand1 >> imm;                             // SHRI
+            6'b110010: result = imm;                                    // MOVI
+            default: begin
+                result = 32'd0;    // Default to zero if undefined control signal
+                reg_write = 1'b0;     // Don't write if operation is undefined
+                flags = 4'd0;      // Clear flags
+            end
+        endcase
+    end
+
+    // Flags update (Zero, Parity, Carry, Borrow)
+    always @(*) begin
+        // Zero flag
+        //$display("EXE: ctrl=%b rs1=%d rs2=%d imm=%d result=%d", control_signal_exe, operand1, operand2, imm, result);
+
+        flags[3] = (result == 32'd0) ? 1'b1 : 1'b0;
+        
+        // Parity flag (even parity of result)
+        flags[2] = ~(^result[31:0]); // XOR all bits and invert
+        
+        // Carry flag (set during addition/subtraction)
+        flags[1] = carry_temp;
+        
+        // Borrow flag (set during subtraction)
+        flags[0] = borrow_temp;
+    end
+
+endmodule
