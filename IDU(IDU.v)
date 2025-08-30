@@ -1,0 +1,188 @@
+`timescale 1ns / 1ps
+module IDU (
+    input  wire [31:0] instruction,
+    input  wire [31:0] PC,
+    input  wire [31:0] rs1_data_in,
+    input  wire [31:0] rs2_data_in,
+
+    output reg  [5:0] control_signal_EXE,
+    output reg  [5:0] control_signal_PC,
+    output reg  [5:0] control_signal_MEM,
+    output reg  [5:0] control_signal_INT,
+    output reg  [5:0] control_signal_IO,
+    output reg  [5:0] control_signal_IFU,
+
+    output reg  [31:0] target_address,
+    output reg  [4:0]  rd, rs1, rs2,
+    output reg  [31:0] imm,
+    output reg  [31:0] loc,
+    output reg  [31:0] write_data,
+    output reg  [4:0]  store_reg_loc,
+    output reg         mem_write_en,
+    output reg         mem_read_en,
+
+    output reg         ret_from_fun,
+    output reg         I0, I1, Timer_int,
+    output reg         RF_trigger,
+    output reg  [31:0] rs1_data,
+    output reg  [31:0] rs2_data
+);
+
+    wire [5:0] opcode       = instruction[31:26];
+    wire [25:0] check_for_RET = instruction[25:0];
+    wire [10:0] funct11     = instruction[10:0];
+    wire [3:0] funct4       = instruction[3:0];
+    wire [25:0] addr26      = instruction[25:0];
+    wire [13:0] off14       = instruction[13:0];
+    wire        f_mem       = instruction[25];
+
+    function [31:0] sign_ext14(input [13:0] in);
+        sign_ext14 = {{18{in[13]}}, in};
+    endfunction
+    function [31:0] sign_ext16(input [14:0] in);
+        sign_ext16 = {{17{in[14]}}, in};
+    endfunction
+    always @(*) begin
+        // Clear all outputs by default
+        control_signal_EXE = 6'b000000;
+        control_signal_PC  = 6'b000000;
+        control_signal_MEM = 6'b000000;
+        control_signal_INT = 6'b000000;
+        control_signal_IO  = 6'b000000;
+        control_signal_IFU = 6'b000000;
+
+        target_address = 32'b0;
+        rd = 5'b0; rs1 = 5'b0; rs2 = 5'b0;
+        imm = 32'b0;
+        loc = 32'b0;
+        write_data = 32'b0;
+        store_reg_loc = 5'b0;
+        mem_write_en = 1'b0;
+        mem_read_en  = 1'b0;
+        ret_from_fun = 1'b0;
+        I0 = 1'b0; I1 = 1'b0; Timer_int = 1'b0;
+        RF_trigger = 1'b0;
+        rs1_data = 32'b0;
+        rs2_data = 32'b0;
+
+        case (opcode)
+            6'b000000: begin // R-type
+                rd = instruction[25:21];
+                rs1 = instruction[20:16];
+                rs2 = instruction[15:11];
+                RF_trigger = 1'b1;
+                //rs1_data = rs1_data_in;
+                //rs2_data = rs2_data_in;
+                case (funct11)
+                    11'b00000000001: control_signal_EXE = 6'b100000;//add
+                    11'b00000000010: control_signal_EXE = 6'b100001;//sub
+                    11'b00000000011: control_signal_EXE = 6'b100010;//mul
+                    11'b00000000100: control_signal_EXE = 6'b100011;//and
+                    11'b00000000101: control_signal_EXE = 6'b100100;//or
+                    11'b00000000110: control_signal_EXE = 6'b100101;//xor
+                    11'b00000000111: control_signal_EXE = 6'b100110;//shl
+                    11'b00000001000: control_signal_EXE = 6'b100111;//shr
+                    11'b00000001001: control_signal_EXE = 6'b101000;//cmp
+                    11'b00000001010: control_signal_EXE = 6'b101001;//mov
+                endcase
+            end
+            6'b000001: begin // I-type
+                imm = sign_ext16(instruction[15:4]);
+                rd  = instruction[25:21];
+                rs1 = instruction[20:16];
+                RF_trigger = 1'b1;
+                //rs1_data = rs1_data_in;
+                case (funct4)
+                    4'b0001: control_signal_EXE = 6'b101010;//ADDI
+                    4'b0010: control_signal_EXE = 6'b101011;//subi
+                    4'b0011: control_signal_EXE = 6'b101100;//muli
+                    4'b0100: control_signal_EXE = 6'b101101;//andi
+                    4'b0101: control_signal_EXE = 6'b101110;//ori
+                    4'b0110: control_signal_EXE = 6'b101111;//xori
+                    4'b0111: control_signal_EXE = 6'b110000;//shli
+                    4'b1000: control_signal_EXE = 6'b110001;//shri
+                    4'b1001: control_signal_EXE = 6'b110010;//MOVI
+                endcase
+            end
+
+            6'b000010: begin // J-type
+                if (check_for_RET == 26'b0) begin
+                    control_signal_PC = 6'b000110;
+                    ret_from_fun = 1'b0;
+                end else begin
+                    target_address = {6'b0, addr26};
+                    control_signal_PC = 6'b110011;
+                end
+            end
+
+            6'b000011: begin // B-type
+                imm = sign_ext14(off14);
+                rs1 = instruction[25:21];
+                rs2 = instruction[20:16];
+                RF_trigger = 1'b1;
+                //rs1_data = rs1_data_in;
+                //rs2_data = rs2_data_in;
+                case (instruction[15:14])
+                    2'b00: if (rs1_data_in == rs2_data_in) control_signal_PC = 6'b001100;
+                    2'b01: if (rs1_data_in != rs2_data_in) control_signal_PC = 6'b001100;
+                    2'b10: if (rs1_data_in > rs2_data_in)  control_signal_PC = 6'b001100;
+                    2'b11: if (rs1_data_in < rs2_data_in)  control_signal_PC = 6'b001100;
+                endcase
+                if (control_signal_PC == 6'b001100)
+                    target_address = PC+ imm;
+            end
+
+            6'b000100: begin // M-type
+                imm = sign_ext16(instruction[19:5]);
+                rs1 = instruction[4:0];
+                rs2 = instruction[24:20];
+                RF_trigger = 1'b1;
+                //rs1_data = rs1_data_in;
+                //rs2_data = rs2_data_in;
+                if (f_mem) begin
+                    control_signal_MEM = 6'b111000; // LW
+                    loc = rs1_data + imm;
+                    store_reg_loc = rs2;   
+                    mem_read_en = 1'b1;
+                end else begin
+                    control_signal_MEM = 6'b111001; // SW
+                    loc = rs2_data + imm;
+                    write_data = rs1_data;
+                    mem_write_en = 1'b1;
+                end
+            end
+//function call and jump seemed to do the same so i am commenting function call
+//            6'b000101: begin // Function call / RET from function
+//                if (check_for_RET == 26'b0) begin
+//                    control_signal_PC = 6'b000110;
+//                    ret_from_fun = 1'b1;
+//                end else begin
+//                    target_address = {6'b000000, instruction[25:0]};
+//                    control_signal_PC = 6'b000011;
+//                end
+//            end
+
+            6'b111111: begin
+                control_signal_PC = 6'b111010; // NOP
+                control_signal_IFU = 6'b001001;
+            end
+
+            6'b111110: begin
+                control_signal_PC = 6'b111011; // HALT
+                control_signal_IFU = 6'b001001;
+            end
+            
+            6'b111100: begin//OUT instruction
+            //signal to be sent to IO
+               control_signal_IO = 6'b111101;
+            end
+            
+             6'b111011: begin//IN instruction
+             //signal to be sent to mem
+             control_signal_IO = 6'b111110;
+            end
+            
+            //for function call
+        endcase
+    end
+endmodule
